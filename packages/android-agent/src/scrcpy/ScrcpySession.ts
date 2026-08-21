@@ -48,6 +48,8 @@ export class ScrcpySession {
   private _video: ScrcpyVideo | null = null
   private _control: ScrcpyControl | null = null
   private port = 0
+  /** Set to true before we intentionally kill serverProc so the exit handler stays quiet. */
+  private stopping = false
 
   constructor() {
     const buf = randomBytes(4)
@@ -104,6 +106,10 @@ export class ScrcpySession {
       'video_codec_options=profile:int=1,i-frame-interval:int=1',
     ], { stdio: ['ignore', 'pipe', 'ignore'] })
 
+    // A session that starts after a previous stop() must be able to warn on an unexpected exit
+    // again -- without this, `stopping` stays true from the earlier stop() forever, and every
+    // exit after the first restart silently logs at debug instead of warn.
+    this.stopping = false
     this.serverProc = serverProc
     // adb shell mixes server stdout+stderr into the local process stdout
     serverProc.stdout?.on('data', (d: Buffer) => {
@@ -113,6 +119,15 @@ export class ScrcpySession {
     // Without a handler, an unhandled 'error' event (e.g. spawn() failing with ENOENT/EACCES,
     // or EPERM from kill()) throws and crashes the whole agent — taking down every device it manages.
     serverProc.on('error', (e) => logger.error(`server process: ${e.message}`))
+    // Log why the server exited so restart loops have a recorded cause. Expected exits (our own
+    // stop() sets this.stopping) are debug-level noise; unexpected ones are warnings.
+    serverProc.on('exit', (code, signal) => {
+      if (this.stopping) {
+        logger.debug(`server process exited (code=${code ?? '-'} signal=${signal ?? '-'})`)
+      } else {
+        logger.warn(`server process exited unexpectedly (code=${code ?? '-'} signal=${signal ?? '-'})`)
+      }
+    })
     serverProc.unref()
 
     try {
@@ -140,6 +155,7 @@ export class ScrcpySession {
   }
 
   stop(serial: string): void {
+    this.stopping = true
     this.serverProc?.kill()
     this.serverProc = null
     this.videoSocket?.destroy()
