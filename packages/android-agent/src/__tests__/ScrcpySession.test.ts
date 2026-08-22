@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach, beforeAll, afterAll } from 'vitest'
 import { EventEmitter } from 'events'
 import { execFile, spawn } from 'child_process'
 
@@ -30,6 +30,14 @@ function cbFail(error: Error) {
 }
 
 describe('ScrcpySession', () => {
+  beforeAll(() => {
+    vi.stubEnv('LOG_LEVEL', 'debug')
+  })
+
+  afterAll(() => {
+    vi.unstubAllEnvs()
+  })
+
   beforeEach(() => {
     process.env['ADB_PATH'] = '/usr/bin/adb'
   })

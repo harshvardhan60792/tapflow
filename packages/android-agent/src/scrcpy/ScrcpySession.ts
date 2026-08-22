@@ -48,8 +48,9 @@ export class ScrcpySession {
   private _video: ScrcpyVideo | null = null
   private _control: ScrcpyControl | null = null
   private port = 0
-  /** Set to true before we intentionally kill serverProc so the exit handler stays quiet. */
-  private stopping = false
+  /** The process we killed on purpose — compared by identity so a late exit from an old
+   *  process is never blamed on the one running now. */
+  private stoppedProc: ChildProcess | null = null
 
   constructor() {
     const buf = randomBytes(4)
@@ -106,10 +107,6 @@ export class ScrcpySession {
       'video_codec_options=profile:int=1,i-frame-interval:int=1',
     ], { stdio: ['ignore', 'pipe', 'ignore'] })
 
-    // A session that starts after a previous stop() must be able to warn on an unexpected exit
-    // again -- without this, `stopping` stays true from the earlier stop() forever, and every
-    // exit after the first restart silently logs at debug instead of warn.
-    this.stopping = false
     this.serverProc = serverProc
     // adb shell mixes server stdout+stderr into the local process stdout
     serverProc.stdout?.on('data', (d: Buffer) => {
@@ -122,10 +119,11 @@ export class ScrcpySession {
     // Log why the server exited so restart loops have a recorded cause. Expected exits (our own
     // stop() sets this.stopping) are debug-level noise; unexpected ones are warnings.
     serverProc.on('exit', (code, signal) => {
-      if (this.stopping) {
-        logger.debug(`server process exited (code=${code ?? '-'} signal=${signal ?? '-'})`)
+      const detail = `code=${code ?? '-'} signal=${signal ?? '-'}`
+      if (this.stoppedProc === serverProc) {
+        logger.debug(`server process exited (${detail})`)
       } else {
-        logger.warn(`server process exited unexpectedly (code=${code ?? '-'} signal=${signal ?? '-'})`)
+        logger.warn(`server process exited unexpectedly (${detail})`)
       }
     })
     serverProc.unref()
@@ -148,6 +146,7 @@ export class ScrcpySession {
       logger.info(`ready — ${info.deviceName} ${info.width}×${info.height}`)
       return info
     } catch (e) {
+      this.stoppedProc = serverProc
       serverProc.kill()
       this.serverProc = null
       throw e
@@ -155,7 +154,7 @@ export class ScrcpySession {
   }
 
   stop(serial: string): void {
-    this.stopping = true
+    this.stoppedProc = this.serverProc
     this.serverProc?.kill()
     this.serverProc = null
     this.videoSocket?.destroy()
