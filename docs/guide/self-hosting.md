@@ -479,3 +479,68 @@ After updating the global package, restart the service:
 npm update -g tapflow
 sudo systemctl restart tapflow-relay
 ```
+
+## Docker & Docker Compose
+
+The relay and web dashboard are distributed as an official Docker container image (`tapflow/tapflow`).
+
+::: tip Relay-only container
+The Docker container packages only the relay server and web dashboard. iOS and Android agents require macOS/Xcode/ADB and run natively on your Mac.
+:::
+
+### Placement rule
+
+Video and audio frames stream continuously between agents and the browser through the relay.
+
+- **Run on your local network**: Host the container on the same Mac or on a server/NAS on the same local network (LAN) to maintain real-time low-latency performance.
+- **Do not deploy on a public cloud VM**: Hosting the relay in an external cloud VM exposes screen data outside your network and adds unnecessary WAN latency.
+
+### One-liner (Docker CLI)
+
+```sh
+docker run -d \
+  --name tapflow-relay \
+  -p 4000:4000 \
+  -v tapflow-data:/app/.tapflow/data \
+  --restart unless-stopped \
+  tapflow/tapflow:latest
+```
+
+### Docker Compose
+
+Save the following as `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  tapflow-relay:
+    image: tapflow/tapflow:latest
+    container_name: tapflow-relay
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      - tapflow-data:/app/.tapflow/data
+    environment:
+      - NODE_ENV=production
+      # - JWT_SECRET=your-custom-jwt-secret
+      # - TAPFLOW_PORT=4000
+
+volumes:
+  tapflow-data:
+    name: tapflow-data
+```
+
+Start the container:
+
+```sh
+docker compose up -d
+```
+
+Check logs:
+
+```sh
+docker compose logs -f
+```
+

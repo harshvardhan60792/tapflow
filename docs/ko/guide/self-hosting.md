@@ -480,3 +480,68 @@ journalctl -u tapflow-relay -f
 npm update -g tapflow
 sudo systemctl restart tapflow-relay
 ```
+
+## Docker 및 Docker Compose
+
+릴레이와 웹 대시보드는 공식 Docker 컨테이너 이미지(`tapflow/tapflow`)로 제공됩니다.
+
+::: tip 릴레이 전용 컨테이너
+Docker 컨테이너는 릴레이 서버와 웹 대시보드만 포함합니다. iOS 및 Android 에이전트는 macOS/Xcode/ADB가 필요하므로 Mac에서 직접 실행해야 합니다.
+:::
+
+### 컨테이너 위치 원칙
+
+에이전트와 브라우저 사이의 영상 및 음성 프레임은 릴레이를 거쳐 실시간으로 스트리밍됩니다.
+
+- **로컬 네트워크(LAN)에서 실행**: 실시간 저지연 스트리밍 성능을 위해 같은 Mac 또는 동일한 LAN 내의 서버/NAS에서 컨테이너를 실행하세요.
+- **외부 퍼블릭 클라우드 VM 배포 지양**: 외부 클라우드 VM에 릴레이를 배포하면 화면 데이터가 외부 네트워크를 경유하며 왕복 지연 시간(RTT)이 증가합니다.
+
+### 단일 명령어 실행 (Docker CLI)
+
+```sh
+docker run -d \
+  --name tapflow-relay \
+  -p 4000:4000 \
+  -v tapflow-data:/app/.tapflow/data \
+  --restart unless-stopped \
+  tapflow/tapflow:latest
+```
+
+### Docker Compose
+
+`docker-compose.yml` 파일을 생성합니다:
+
+```yaml
+version: '3.8'
+
+services:
+  tapflow-relay:
+    image: tapflow/tapflow:latest
+    container_name: tapflow-relay
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      - tapflow-data:/app/.tapflow/data
+    environment:
+      - NODE_ENV=production
+      # - JWT_SECRET=your-custom-jwt-secret
+      # - TAPFLOW_PORT=4000
+
+volumes:
+  tapflow-data:
+    name: tapflow-data
+```
+
+컨테이너 실행:
+
+```sh
+docker compose up -d
+```
+
+로그 확인:
+
+```sh
+docker compose logs -f
+```
+
