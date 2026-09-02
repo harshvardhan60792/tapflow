@@ -117,7 +117,7 @@ export class ScrcpySession {
     // or EPERM from kill()) throws and crashes the whole agent — taking down every device it manages.
     serverProc.on('error', (e) => logger.error(`server process: ${e.message}`))
     // Log why the server exited so restart loops have a recorded cause. Expected exits (our own
-    // stop() sets this.stopping) are debug-level noise; unexpected ones are warnings.
+    // stop() records stoppedProc) are debug-level noise; unexpected ones are warnings.
     serverProc.on('exit', (code, signal) => {
       const detail = `code=${code ?? '-'} signal=${signal ?? '-'}`
       if (this.stoppedProc === serverProc) {
